@@ -8,8 +8,8 @@ class TestCheckers(unittest.TestCase):
     def setUp(self):
         # Loads the reference images
 
-        self.reference_img = np.load('reference_arrays/checker.npy')
-        self.reference_img2 = np.load('reference_arrays/checker2.npy')
+        self.reference_img = np.load('E:/Deep Learning/Exercise/ex0/src/reference_arrays/checker.npy')
+        self.reference_img2 = np.load('E:/Deep Learning/Exercise/ex0/src/reference_arrays/checker2.npy')
 
     def testPattern(self):
         # Creates a checkerboard pattern with resolution 250x250
@@ -44,8 +44,8 @@ class TestCircle(unittest.TestCase):
     def setUp(self):
         # Loads the reference images
 
-        self.reference_img = np.load('reference_arrays/circle.npy')
-        self.reference_img2 = np.load('reference_arrays/circle2.npy')
+        self.reference_img = np.load('E:/Deep Learning/Exercise/ex0/src/reference_arrays/circle.npy')
+        self.reference_img2 = np.load('E:/Deep Learning/Exercise/ex0/src/reference_arrays/circle2.npy')
 
     def _IoU(self,array1,array2):
         # Utility function returning the intersection over union value
@@ -102,8 +102,8 @@ class TestSpectrum(unittest.TestCase):
    
     def setUp(self):
         # Loads the reference images
-        self.reference_img = np.load('reference_arrays/spectrum.npy')
-        self.reference_img2 = np.load('reference_arrays/spectrum2.npy')
+        self.reference_img = np.load('E:/Deep Learning/Exercise/ex0/src/reference_arrays/spectrum.npy')
+        self.reference_img2 = np.load('E:/Deep Learning/Exercise/ex0/src/reference_arrays/spectrum2.npy')
 
 
     def testPattern(self):
