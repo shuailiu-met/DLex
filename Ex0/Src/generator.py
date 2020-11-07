@@ -31,11 +31,28 @@ class ImageGenerator:
          # self.imagedata = np.load(self.file_path + file)
 
         self.label_path = label_path
-        with open(self.label_path) as js_file:
-          self.labels = json.load(js_file)
+
+        with open(label_path,"r") as js_file:
+          self.labelfile = json.load(js_file)
 
         self.batch_taken = 0
+        self.alldata = []
+        self.label = []
 
+        labelfile = self.labelfile
+        length = len(self.imagedirs)
+        print(length)
+        arrlen = np.arange(0,length)
+        for idx in arrlen:
+            imgdata = np.load(self.file_path+str(idx)+".npy")
+            imgdata = self.augment(imgdata)
+            imgdata = np.resize(imgdata,self.image_size)
+            self.alldata.append(imgdata)#put all data into a big array by the order of idx
+            a = labelfile[str(idx)]#label of the correspond npy
+            self.label.append(a)
+        print(np.size(self.alldata))
+
+        
         self.class_dict = {0: 'airplane', 1: 'automobile', 2: 'bird', 3: 'cat', 4: 'deer', 5: 'dog', 6: 'frog',
                            7: 'horse', 8: 'ship', 9: 'truck'}
         #TODO: implement constructor
@@ -46,54 +63,73 @@ class ImageGenerator:
         # Note that your amount of total data might not be divisible without remainder with the batch_size.
         # Think about how to handle such cases
         #TODO: implement next method
-        num = len(self.imagedirs)
+        imagedata = []
+        labeldata = []
+
+        num = len(self.alldata)
         arr = np.arange(0,num)
 
         if(self.shuffle):
-            arr = np.random.shuffle(arr)#randomly distribute 100, then we can get different batch and use the number to get the file since files are named as number.npy
+            np.random.shuffle(arr)
+           
         
-        if(self.batch_taken+self.batch_size>num):#make sure that length of each batch is the same
-            index1 = arr[self.batch_taken:num]
-            num_before = num- self.batch_taken
-            num_after = self.batch_size-num_before
-            index2 = arr[0:num_after]
-            index_batch = np.concatenate((index1,index2))
+        if(self.batch_taken+self.batch_size<=num):
+            idx_in_batch = np.arange(0,self.batch_size)
+            for i in idx_in_batch:
+                idx_in_arr = self.batch_taken+i
+                pos = arr[idx_in_arr]
+                imagedata.append(self.alldata[pos])
+                labeldata.append(self.label[pos])
+            self.batch_taken+=self.batch_size
+
+            plt.figure()
+            plt.imshow(self.alldata[56])
+            plt.show()
+
         else:
-            index_batch = arr[self.batch_taken : self.batch_taken+self.batch_size]
-            self.batch_taken += self.batch_size
+            idx_before = num-self.batch_taken
+            idx_in_batch = np.arange(0,idx_before)
+            for i in idx_in_batch:
+                idx_in_arr = self.batch_taken+i
+                pos = arr[idx_in_arr] 
+                imagedata.append(self.alldata[pos])
+                labeldata.append(self.label[pos])
+            print(np.shape(imagedata))
+            idx_after = np.arange(0,self.batch_size-idx_before)
+            tempimage =[]
+            templabel =[]
+            for i in idx_after:#continue with the beginning
+                idx_in_arr = i
+                pos = arr[idx_in_arr]
+                tempimage.append(self.alldata[pos])
+                templabel.append(self.label[pos])
+
+            print(np.shape(tempimage))
+
+            imagedata = np.concatenate([imagedata,tempimage])
+            labeldata = np.concatenate([labeldata,templabel])
+
+            self.batch_taken = self.batch_size-idx_before
 
 
-        imgfile = []
-        a = random.random()
-        for i in index_batch:
-          img = np.load(self.file_path+str(i)+".npy")
-          img = np.resize(img,self.image_size)
 
-          if(self.rotation):
-              if(a<=0.25):
-                  img = np.rot90(img,3)
-              elif(0.25<a<=0.5):
-                  img = np.rot90(img,2)
-              elif(0.5<a<=0.75):
-                  img = np.rot90(img,1)
 
-          if(self.mirroring):
-              b = random.random()
-              if(b<0.5):
-                  img = np.flip(img,axis=0)
+            
 
-          imgfile.append(img)
-
-        with open(self.label_path) as js_file:
-            labels_total = json.load(js_file)
-        
-        label_for_img = []
-        for i in index_batch:
-            label_for_img.append(labels_total[str(i)])#jsonfile[string] will return the class/label value of the str
-
-        images = np.copy(imgfile)
-        labels = np.copy(label_for_img)
-
+        #if(self.batch_taken+self.batch_size>num):#make sure that length of each batch is the same
+        #    index1 = arr_idx[self.batch_taken:num]
+        #    num_before = num- self.batch_taken
+        #    num_after = self.batch_size-num_before
+        #    index2 = arr_idx[0:num_after]
+        #    index_batch = np.concatenate((index1,index2))
+        #    self.batch_taken = num_after
+        #else:
+        #    index_batch = arr_idx[self.batch_taken : self.batch_taken+self.batch_size]
+        #    self.batch_taken += self.batch_size
+        #    print(self.batch_taken)
+        images = np.copy(imagedata)
+        labels = np.copy(labeldata)
+       
         return images, labels
 
     def augment(self,img):
@@ -102,16 +138,17 @@ class ImageGenerator:
         #TODO: implement augmentation function
         a = random.random()
         b = random.random()
-
-        if(a<=0.25):
-            img = np.rot90(img,3)
-        elif(0.25<a<=0.5):
-            img = np.rot90(img,2)
-        elif(0.5<a<=0.75):
-            img = np.rot90(img,1)
-
-        if(b<0.5):
-            img = np.flip(img,axis=0)
+        if(self.rotation):
+            if(0.75<a):
+               img = np.rot90(img,3)
+            elif(0.25<a<=0.5):
+               img = np.rot90(img,1)
+            elif(0.5<a<=0.75):
+               img = np.rot90(img,2)
+               
+        if(self.mirroring):
+            if(b<0.5):
+               img = np.flip(img,axis=0)
 
         return img
 
@@ -124,4 +161,19 @@ class ImageGenerator:
         # In order to verify that the generator creates batches as required, this functions calls next to get a
         # batch of images and labels and visualizes it.
         #TODO: implement show method
+
+        images,labels = self.next()
+
+        plt.figure()
+        lines = int(np.ceil(self.batch_size/4))
+
+        for i,image in enumerate(images):
+
+            label = self.class_name( int(labels[i]) )
+
+            plt.subplot(lines , 4 , i+1)
+            plt.imshow( image )
+            plt.title(label)
+        plt.show()
+
         return
