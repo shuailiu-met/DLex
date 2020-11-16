@@ -13,11 +13,8 @@ class FullyConnected():
     def forward(self,input_tensor):
         column_num = np.shape(input_tensor)[0]
         bias = np.ones((column_num,1))
-        new_input = np.concatenate((input_tensor,bias),axis = 1)
-        
-        #in formula,W is already tranposed, but in memory layout,transposed again,so weights is what we need
-        #input should be (n+1,b), here we have (b,n+1)size as input,since we need a tranpose according to memory layout, so the (b,n+1) input is what we need
-
+        new_input = np.concatenate((input_tensor,bias),axis = 1)# add homogeneous part,inputsize as columns,so add a column of 1 on the right end
+        #attention of the double transpose of W
         y = np.dot(new_input,self.weights)
         self.input_tensor = new_input
         return y
