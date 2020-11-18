@@ -6,7 +6,7 @@ class ReLU():
 
     def forward(self,input_tensor):
         self.input_tensor = input_tensor
-        forward = np.maximum(input_tensor,np.zeros((np.shape(input_tensor))))
+        forward = np.maximum(input_tensor,np.zeros((np.shape(input_tensor))))#f = max(0,x)
         return forward
 
     def backward(self,error_tensor):

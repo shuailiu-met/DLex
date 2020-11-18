@@ -29,13 +29,13 @@ class FullyConnected():
     
     def backward(self,error_tensor):
         weight_n = self.weights[0:np.shape(self.weights)[0]-1,:]#weight should remove the bias part here
-        gradient_x = np.dot(error_tensor,np.transpose(weight_n))#memory layout
+        gradient_x = np.dot(error_tensor,np.transpose(weight_n))#gradient with respect to x
 
-        temp_gradient_weights = np.dot(np.transpose(self.input_tensor),error_tensor) #need to store inputtensor in forward step,input tensor is always with homogenous dim
+        temp_gradient_weights = np.dot(np.transpose(self.input_tensor),error_tensor) #need to store input tensor in forward step,input tensor is always with homogenous dim
         self.gradient_weights = temp_gradient_weights #setter used 
         #update weights
         if self.optimizer is not None:
-            self.weights = self._optimizer.calculate_update(self.weights,self.gradient_weights)
+            self.weights = self._optimizer.calculate_update(self.weights,self.gradient_weights)#update weights and errors
         return gradient_x
 
     @property
