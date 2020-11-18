@@ -26,7 +26,7 @@ class NeuralNetwork():
         error_tensor = self.loss_layer.backward(self.label_tensor)#entropyloss 
         for i in range(len(self.layers)-1,-1,-1):
             error_tensor_front = self.layers[i].backward(error_tensor)
-            error_tensor = error_tensor_front #for front layer
+            error_tensor = error_tensor_front #for front layer(error/gradients),update weight for next iteration/trial
 
 
     def append_trainable_layer(self,layer):#assign optimizer to each layer
@@ -42,7 +42,7 @@ class NeuralNetwork():
             loss_of_this_iteration = self.forward()
             if loss_of_this_iteration is not None:
                 self.loss.append(loss_of_this_iteration)
-            self.backward()#back propagation,computes gradients for forward path
+            self.backward()#back propagation,computes gradients and update weights for forward path,so that next iteration can work better,in next iter,forward can run with new weights
         #print(np.shape(self.loss))
 
     def test(self, input_tensor):
