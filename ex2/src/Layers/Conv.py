@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import signal
-
+import copy as copy
 
 
 class Conv:
@@ -13,9 +13,10 @@ class Conv:
         #for each kernel,we have convolution_shape weights,works for both 1d and 2d case
         self.weights = np.random.uniform(0,1,weights_shape)
         self.bias = np.random.rand(num_kernels)   #Bias is an element-wise addition of a scalar value for each kernel.//bias added on each output layer with respect to kernel(one Kernel,one output layer) 
-        self._gradient_weights = np.zeros(weights_shape)
-        self._gradient_bias = np.zeros(num_kernels)
+        self._gradient_weights = None
+        self._gradient_bias = None
         self._optimizer = None
+        self._optimizer_forbias = None
         self.input_tensor = None
 
 
@@ -33,7 +34,7 @@ class Conv:
         return self._gradient_bias
     
     @gradient_bias.setter
-    def gradient_vuas(self,gb_value):
+    def gradient_bias(self,gb_value):
         self._gradient_bias = gb_value   
 
     @property
@@ -42,7 +43,8 @@ class Conv:
     
     @optimizer.setter
     def optimizer(self,_optimizer_obj):#_optimizer is a object of type sgd
-        self._optimizer = _optimizer_obj
+        self._optimizer = copy.deepcopy(_optimizer_obj)
+        self._optimizer_forbias = copy.deepcopy(_optimizer_obj)
 
 
     #do corr.then stride,and put it in output array
@@ -60,7 +62,7 @@ class Conv:
                         kernel_weights = self.weights[kernel,channel,:]
                         corr_channel = signal.correlate(data,kernel_weights,'same')
                         temp_output[batch,kernel,channel,:] = corr_channel
-                    sum_out = np.sum(temp_output,axis = 2)             #sum over channels
+                    sum_out = np.sum(temp_output,axis = 2)             #sum along channels
                     output_tensor[batch,kernel,:] = sum_out[batch,kernel,:]+ self.bias[kernel]                
             stride_out = output_tensor[:,:,::self.stride_shape[0]]
 
@@ -77,7 +79,7 @@ class Conv:
                         kernel_weights = self.weights[kernel,channel,:,:]
                         corr_channel = signal.correlate(data,kernel_weights,'same')
                         temp_output[batch,kernel,channel,:,:] = corr_channel
-                    sum_out = np.sum(temp_output,axis = 2)            #sum over channels
+                    sum_out = np.sum(temp_output,axis = 2)            #sum along channels
                     output_tensor[batch,kernel,:,:] = sum_out[batch,kernel,:,:]+ self.bias[kernel] #bias is only added once elementwise for each kernel
             stride_out = output_tensor[:,:,::self.stride_shape[0],::self.stride_shape[1]]
         return stride_out
@@ -90,62 +92,79 @@ class Conv:
         #errortensor could be len 3 or 4
         #for gradient of weights, input needs to be padded
 
+        error_front = np.zeros(np.shape(self.input_tensor))
 
-        #######error tensor of the fronter
-        weights_back = np.swapaxes(self.weights,0,1)# rearrange the weights to channel_num kernels , c k n/c k n m
+        
+        #####upscaling error tensor to the shape without stride
+        if (len(self.input_tensor.shape) == 4):
+            stride_y, stride_x = self.stride_shape
+            b, c, y, x = np.shape(self.input_tensor)
+            upscaled_error = np.zeros((b, self.num_kernels, y, x))
+            upscaled_error[:, :, ::stride_y, ::stride_x] = error_tensor
+        else:
+            stride_step = self.stride_shape[0]
+            b, c, y = np.shape(self.input_tensor)
+            upscaled_error = np.zeros((b, self.num_kernels, y))
+            upscaled_error[:, :, ::stride_step] = error_tensor
+        
+        #flip over channel dim if 3d
+        weight_for_err = self.weights
+        if(self.input_tensor.shape == 4):
+            weight_for_err = np.flip(weight_for_err,axis = 1)
 
-        if(len(np.shape(error_tensor))==3):#2d case     b k n     c kernels  k is the channel number of E
-            num_channels = np.shape(self.input_tensor)[1]
-            b,k,n = np.shape(error_tensor)
-            #upscale first 
-            upscaled_error = np.zeros((b,k,np.shape(self.input_tensor)[2]))
-            stride_y = self.stride_shape[0]
-            upscaled_error[:,:,::stride_y] = error_tensor # b k y , the rest is 0
-            error_front = np.zeros((b,num_channels,np.shape(self.input_tensor)[2])) #should be b c y
-            temp_error = np.zeros((b,num_channels,k,np.shape(self.input_tensor)[2]))# b c k y sum over k
+        #error front size b c y/ b c y x
+        temp_error = np.zeros((np.shape(self.input_tensor)[0],np.shape(self.input_tensor)[1],self.num_kernels,*np.shape(self.input_tensor)[2:]))   
+        for batch in range(b):
+            for channel in range(c):
+                for kernel in range(self.num_kernels):
+                    err = upscaled_error[batch,kernel,:] #actually convolve error with reordered channel_num kernels,   Tips:   :can also mean all dims after thies
+                    weight_conv = weight_for_err[kernel,channel,:]
+                    temp_error[batch,channel,kernel,:] = signal.convolve(err, weight_conv,'same')  #convolve error and weight to get front error (sum along kernel dim(which is channels of error))
+                    #former kernel dim is now the channels of err
+        error_front = np.sum(temp_error,axis = 2)# sum along kernel dim(error's channel dim)
 
+        #pad input for deltaW
+        if (len(self.input_tensor.shape) == 4): #3d
+            k, c, m, n = np.shape(self.weights)
+            b, c, y, x = np.shape(self.input_tensor)
+            pad_input = np.zeros((b, c, y+m-1, x+n-1))
             for batch in range(b):
-                for new_k in range(num_channels):
-                    for new_c in range(k):
-                        error_channel = upscaled_error[batch,new_c,:]
-                        conv_kernel = weights_back[new_k,new_c,:]
-                        conv_channel = signal.convolve(error_channel,conv_kernel,'same')
-                        temp_error[batch,new_k,new_c,:] = conv_channel
-            error_front = np.sum(temp_error,axis=2)
-
-
-        elif(len(np.shape(error_tensor))==4):# 3d case b k m n
-            num_channels = np.shape(self.input_tensor)[1]
-            b,k,n,m = np.shape(error_tensor)
-            #upscale first 
-            upscaled_error = np.zeros((b,k,np.shape(self.input_tensor)[2],np.shape(self.input_tensor)[3]))
-            stride_y = self.stride_shape[0]
-            stride_x = self.stride_shape[1]
-            upscaled_error[:,:,::stride_y,::stride_x] = error_tensor # b k y x
-            #flip once on channel dim
-            upscaled_error = np.flip(upscaled_error,axis = 1)
-
-            error_front = np.zeros((b,num_channels,np.shape(self.input_tensor)[2],np.shape(self.input_tensor)[3])) #should be b c y
-            temp_error = np.zeros((b,num_channels,k,np.shape(self.input_tensor)[2],np.shape(self.input_tensor)[3]))# b c k y sum over k
-
+                for channel in range(c):
+                    pad_input[batch, channel, int(m/2):(y+int(m/2)), int(n/2):(x+int(n/2))] = self.input_tensor[batch,channel,:,:]#the first m/2 elemnts and the last m/2 will keep 0 
+        else: #2d
+            k, c, n = np.shape(self.weights)
+            b, c, y = np.shape(self.input_tensor)
+            pad_input = np.zeros((b, c, y+n-1))# n is the kernel wid
             for batch in range(b):
-                for new_k in range(num_channels):
-                    for new_c in range(k):
-                        error_channel = upscaled_error[batch,new_c,:,:]
-                        conv_kernel = weights_back[new_k,new_c,:,:]
-                        conv_channel = signal.convolve(error_channel,conv_kernel,'same')
-                        temp_error[batch,new_k,new_c,:,:] = conv_channel
-            error_front = np.sum(temp_error,axis=2)
+                for channel in range(c):
+                    pad_input[batch,channel,int(n/2):(y + int(n/2))] = self.input_tensor[batch,channel,:]
 
+        #correlate padded X and En to get gradient of W
+        #calculate gradient of weights   
+        self.gradient_weights = np.zeros(np.shape(self.weights))         # k c n/ k c n m
+        temp_gradient = np.zeros((b,*np.shape(self.weights))) # b k c n/
+        for batch in range(b):
+            for kernel in range(k):
+                for channel in range(c):
+                    Xs = pad_input[batch,channel,:]
+                    E_hn = upscaled_error[batch,kernel,:]
+                    temp_gradient[batch,kernel,channel,:] = signal.correlate(Xs, E_hn, mode='valid')#valid here, due to padding, delta needs to sum along batch dim               
+        self.gradient_weights = np.sum(temp_gradient,axis = 0)#sum along batch dim
 
-        ############ update weights and bias
-        # first, pad input_tensor
+        # calculate gradient of bias
+        self.gradient_bias = np.zeros(self.num_kernels)
+        b = np.shape(error_tensor)[0]
+        k = np.shape(error_tensor)[1] #kernal num
+        for batch in range(b):
+            for kernel in range(k):
+                self.gradient_bias[kernel] += np.sum(error_tensor[batch,kernel,:])# sum of elements error
 
+        # calculate weights and bias
+        if self.optimizer is not None:
+            self.weights = self._optimizer.calculate_update(self.weights, self.gradient_weights)
+            self.bias = self._optimizer_forbias.calculate_update(self.bias, self.gradient_bias)
 
-
-          
         return error_front
-
 
 
 
