@@ -54,6 +54,6 @@ class Pooling:
                         co_y = int(self.coord_y[batch,channel,out_y_idx,out_x_idx])
                         co_x = int(self.coord_x[batch,channel,out_y_idx,out_x_idx])
                         value = error_tensor[batch,channel,out_y_idx,out_x_idx]
-                        output_error[batch,channel,co_y,co_x] += value   #some overlaping points have done contribution to 2 lapping,so the error tensor value is sumed for this point
+                        output_error[batch,channel,co_y,co_x] += value   #some overlaping points have done contribution to 2 lapping,so the error tensor value is summed for this point
 
         return output_error
