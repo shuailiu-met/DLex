@@ -1,10 +1,10 @@
 import numpy as np
-from Layers import Base
-
 #softmax activation
+from .Base import BaseLayer
 
-class SoftMax(Base.BaseLayer):
+class SoftMax(BaseLayer):
     def __init__(self):
+        BaseLayer.__init__(self)
         #self.probability_tensor = None
         pass
 
@@ -19,7 +19,7 @@ class SoftMax(Base.BaseLayer):
         y_hat = np.exp(input_hat)/np.expand_dims(np.sum(np.exp(input_hat),axis = 1),axis = 1)#np.sum returns a array of (9,),we expand dim to (9,1) so it can be divided by(9,4)
         #print(np.shape(y_hat))
         self.probability_tensor = y_hat
-        #print(np.sum(y_hat)) sum = 9,for each sample we do a softmax
+        #print(np.sum(y_hat)) sum = 9,for each sample we do a softmax 
         return self.probability_tensor
 
 

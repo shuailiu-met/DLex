@@ -1,10 +1,10 @@
 import numpy as np
-from Layers import Base
+from .Base import BaseLayer
 
-
-# import non-linear
-class ReLU(Base.BaseLayer):
+# import non-linear 
+class ReLU(BaseLayer):
     def __init__(self):
+        BaseLayer.__init__(self)
         self.input_tensor = None
 
     def forward(self,input_tensor):
