@@ -23,7 +23,7 @@ class RNN(BaseLayer):
 
         self._memorize = False
         self._gradient_weights = None
-        self._weights = np.ones((self.hidden_size + self.input_size+1, self.hidden_size))
+        self._weights = np.random.uniform(0,1,(self.hidden_size + self.input_size+1, self.hidden_size))
         self.weights_y = np.ones((self.hidden_size+1, self.output_size))
 
         self._optimizer = None
@@ -32,11 +32,11 @@ class RNN(BaseLayer):
         # fan_in input_dim/size    fan_out output_dim/size
         weights = weights_initializer.initialize((self.input_size+self.hidden_size, self.hidden_size), self.input_size+self.hidden_size, self.hidden_size)
         bias = bias_initializer.initialize((1, self.hidden_size), self.input_size, self.hidden_size)
-        weights_y = weights_initializer.initialize((self.hidden_size, self.output_size), self.hidden_size, self.output_size)
-        bias_y = bias_initializer.initialize((1, self.output_size), self.hidden_size, self.output_size)
+       # weights_y = weights_initializer.initialize((self.hidden_size, self.output_size), self.hidden_size, self.output_size)
+        #bias_y = bias_initializer.initialize((1, self.output_size), self.hidden_size, self.output_size)
 
         self.weights = np.concatenate((weights, bias), axis=0)
-        self.weights_y = np.concatenate((weights_y, bias_y), axis=0)
+        #self.weights_y = np.concatenate((weights_y, bias_y), axis=0)
 
     @property
     def memorize(self):
@@ -110,30 +110,34 @@ class RNN(BaseLayer):
         dh = np.zeros((self.time_steps, self.hidden_size))
         dx = np.zeros((self.time_steps, self.input_size))
         dhx = np.zeros((self.time_steps, self.hidden_size+self.input_size))
+        dWh = np.zeros((self.hidden_size+self.input_size+1, self.hidden_size))
+        dWy = np.zeros((self.hidden_size+1, self.output_size))
         for t in range(self.time_steps-1, -1, -1):
-            self.F2.input_tensor = self.ht[t].reshape(1, -1)
+            self.F2.input_tensor = np.concatenate((self.ht[t].reshape(1, -1), [[1]]), axis=1)
             dh[t] = self.F2.backward(self.Sigmoid.backward(error_tensor[t]))
+            dWy += self.F2.gradient_weights
 
             if t == self.time_steps-1:
                 pass
             else:
                 dh[t] += dh[t+1]
 
-            self.F1.input_tensor = self.xt_[t].reshape(1, -1)
+            self.F1.input_tensor = np.concatenate((self.xt_[t].reshape(1, -1), [[1]]), axis=1)
             dhx[t] = self.F1.backward(self.TanH.backward(dh[t]))
+            #print(np.shape(self.F1.gradient_weights))
+            dWh += self.F1.gradient_weights
             dh[t] = dhx[t, 0:self.hidden_size]
             dx[t] = dhx[t, self.hidden_size:]
 
-        self.gradient_weights = np.sum(dhx, axis=0)
+        self.gradient_weights = dWh
         if self.optimizer is not None:
-            self.weights = self._optimizer.calculate_update(self.weights, self.gradient_weights.reshape)
+            self.weights = self._optimizer.calculate_update(self.weights, self.gradient_weights)
+            self.weights_y = self._optimizer.calculate_update(self.weights_y, dWy)
 
         return dx
 
     def calculate_regularization_loss(self):
         if self._optimizer.regularizer is not None:
             return self._optimizer.regularizer.norm(self.weights)
-
-
 
 
