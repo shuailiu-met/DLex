@@ -16,10 +16,11 @@ class RNN(BaseLayer):
         #self.ht0 = np.zeros((self.hidden_size))
         self.hidden_state = np.zeros((self.hidden_size))
 
-        self.TanH = TanH()
-        self.Sigmoid = Sigmoid()
         self.F1 = FullyConnected(self.input_size+self.hidden_size, self.hidden_size)
         self.F2 = FullyConnected(self.hidden_size, self.output_size)
+        
+        self.TanH_store = [] # a list store all TanH for each t so that the activation is stored
+        self.Sigmoid_store = [] #a list store Sigmoid for each t so that the activation is stored
 
         self._memorize = False
         self._gradient_weights = None
@@ -89,15 +90,19 @@ class RNN(BaseLayer):
         self.output_tensor = np.zeros((self.time_steps, self.output_size))
 
         for t in range(self.time_steps):
+            TanH_t = TanH()
+            Sigmoid_t = Sigmoid()
             if t == 0:
                 self.xt_[t] = np.concatenate((self.hidden_state, self.input_tensor[t]), axis=0)
             else:
                 self.xt_[t] = np.concatenate((self.ht[t - 1], self.input_tensor[t]), axis=0)
 
 
-            self.ht[t] = self.TanH.forward(self.F1.forward(self.xt_[t].reshape(1, -1)))
+            self.ht[t] = TanH_t.forward(self.F1.forward(self.xt_[t].reshape(1, -1)))
 
-            self.output_tensor[t] = self.Sigmoid.forward(self.F2.forward(self.ht[t].reshape(1, -1)))
+            self.output_tensor[t] = Sigmoid_t.forward(self.F2.forward(self.ht[t].reshape(1, -1)))
+            self.TanH_store.append(TanH_t)
+            self.Sigmoid_store.append(Sigmoid_t)
 
 
         self.hidden_state = self.ht[self.time_steps - 1]
@@ -113,17 +118,18 @@ class RNN(BaseLayer):
         dWh = np.zeros((self.hidden_size+self.input_size+1, self.hidden_size))
         dWy = np.zeros((self.hidden_size+1, self.output_size))
         for t in range(self.time_steps-1, -1, -1):
+            TanH = self.TanH_store[t]
+            Sigmoid = self.Sigmoid_store[t]
             self.F2.input_tensor = np.concatenate((self.ht[t].reshape(1, -1), [[1]]), axis=1)
-            dh[t] = self.F2.backward(self.Sigmoid.backward(error_tensor[t]))
+            h_gradient = self.F2.backward(Sigmoid.backward(error_tensor[t]))
             dWy += self.F2.gradient_weights
-
             if t == self.time_steps-1:
-                pass
+                h_gradient_sum = h_gradient
             else:
-                dh[t] += dh[t+1]
+                h_gradient_sum = dh[t+1] + h_gradient
 
             self.F1.input_tensor = np.concatenate((self.xt_[t].reshape(1, -1), [[1]]), axis=1)
-            dhx[t] = self.F1.backward(self.TanH.backward(dh[t]))
+            dhx[t] = self.F1.backward(TanH.backward(h_gradient_sum))
             #print(np.shape(self.F1.gradient_weights))
             dWh += self.F1.gradient_weights
             dh[t] = dhx[t, 0:self.hidden_size]
@@ -139,5 +145,3 @@ class RNN(BaseLayer):
     def calculate_regularization_loss(self):
         if self._optimizer.regularizer is not None:
             return self._optimizer.regularizer.norm(self.weights)
-
-
