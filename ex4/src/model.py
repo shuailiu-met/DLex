@@ -48,8 +48,12 @@ class ResNet(nn.Module):
             ResBlock(64, 128, 2),
             ResBlock(128, 256, 2),
             ResBlock(256, 512, 2),
-            nn.AvgPool2d(),
+            nn.AvgPool2d(10),
             nn.Flatten(),
             nn.Linear(in_features=512,out_features=2),
             nn.Sigmoid()
         )
+
+    def forward(self,input_tensor):
+        out = self.seq(input_tensor)
+        return out
