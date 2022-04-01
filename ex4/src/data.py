@@ -34,11 +34,11 @@ class ChallengeDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
+        index += self.data.first_valid_index()
         path = self.data.filename[index]
         img_gray = imread(path)
         img_rgb = gray2rgb(img_gray)
-        img_trans = self._transform(img_rgb)
-        crack = self.data.crack[index]
-        inactive = self.data.inactive[index]
 
-        return img_trans, torch.tensor([crack, inactive])
+        img_trans = self._transform(img_rgb)
+
+        return img_trans, torch.tensor([self.data.crack[index], self.data.inactive[index]], dtype=torch.float)

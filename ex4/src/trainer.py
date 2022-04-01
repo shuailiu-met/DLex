@@ -12,7 +12,7 @@ class Trainer:
                  optim=None,  # Optimizer
                  train_dl=None,  # Training data set
                  val_test_dl=None,  # Validation (or test) data set
-                 cuda=True,  # Whether to use the GPU
+                 cuda=False,  # Whether to use the GPU
                  early_stopping_patience=-1):  # The patience for early stopping
         self._model = model
         self._crit = crit
@@ -20,6 +20,7 @@ class Trainer:
         self._train_dl = train_dl
         self._val_test_dl = val_test_dl
         self._cuda = cuda
+        self.best_epoch = 0
 
         self._early_stopping_patience = early_stopping_patience
 
@@ -55,9 +56,11 @@ class Trainer:
         # -reset the gradients
         self._optim.zero_grad()
         # -propagate through the network
-        y_pred = self._model(x)
+        y_prob = self._model(x)
         # -calculate the loss
-        loss = self._crit(y_pred, y)
+        y = y.float()
+        y_prob = y_prob.float()
+        loss = self._crit(y_prob, y)
         # -compute gradient by backward propagation
         loss.backward()
         # -update weights
@@ -104,7 +107,7 @@ class Trainer:
         loss_total = 0
         count = 0
         # disable gradient computation
-        with t.no_grad:
+        with t.no_grad():
             # iterate through the validation set
             for samples in self._val_test_dl:
                 img = samples[0]
@@ -115,10 +118,15 @@ class Trainer:
                     label = label.cuda()
                 # perform a validation step
                 loss, pred = self.val_test_step(img, label)
-                if self._cuda is True:
-                    label_save.append(label.cpu().numpy())  # numpy cant load cuda tensor, so first be cpu tensor
+                if self._cuda is True:  # tensor case
+                    label = label.cpu().numpy()
+                    label_save.append(label)  # numpy cant load cuda tensor, so first be cpu tensor
                     pred_numpy = pred.cpu().numpy()
                     pred_numpy = np.round(pred_numpy)
+                    pred_save.append(pred_numpy)
+                else:  # numpy case
+                    label_save.append(label)
+                    pred_numpy = pred
                     pred_save.append(pred_numpy)
                 score_batch = f1_score(label, pred_numpy, average='macro')
                 score_save.append(score_batch)
@@ -128,8 +136,8 @@ class Trainer:
             # calculate the average loss and average metrics of your choice. You might want to calculate these metrics in designated functions
             avg_loss = loss_total / count
             avg_score = sum(score_save) / count
-            print("Avg validation loss", avg_loss)
-            print("Avg validation f1 score", avg_score)
+            print("Average validation loss", avg_loss)
+            print("Average validation f1 score", avg_score)
         # return the loss and print the calculated metrics
         return avg_loss
 
@@ -141,6 +149,7 @@ class Trainer:
         val_loss = []
         epoch_counter = 0
         len_without_improvement = 0
+        min_loss = 0
         while True:
 
             # stop by epoch number
@@ -152,17 +161,20 @@ class Trainer:
             val_loss_epoch = self.val_test()
             # append the losses to the respective lists
             train_loss.append(train_loss_epoch)
-            val_loss_last = val_loss[-1]
+            if len(val_loss) == 0:
+                min_loss = val_loss_epoch
             val_loss.append(val_loss_epoch)
             # use the save_checkpoint function to save the model (can be restricted to epochs with improvement)
 
-            if val_loss_epoch < val_loss_last:
+            if val_loss_epoch < min_loss:
+                min_loss = val_loss_epoch
                 self.save_checkpoint(epoch_counter)
                 len_without_improvement = 0
+                self.best_epoch = epoch_counter
             else:
                 len_without_improvement += 1
             # check whether early stopping should be performed using the early stopping criterion and stop if so
             if len_without_improvement >= self._early_stopping_patience:
                 break
             # return the losses for both training and validation
-            return train_loss, val_loss
+        return train_loss, val_loss
